@@ -5,13 +5,70 @@ import { requireAuth, requireAdmin, AuthedRequest } from "../middleware/requireA
 
 const router = Router();
 
-// GET /api/items — public, list all books
+// GET /api/items — public, list books with search, filter, sort, pagination
 router.get("/", async (req, res) => {
   try {
     const db = getDB();
-    const items = await db.collection("items").find({}).sort({ createdAt: -1 }).toArray();
-    res.status(200).json({ items });
+
+    const {
+      search,
+      genre,
+      language,
+      featured,
+      sort = "newest",
+      page = "1",
+      limit = "8",
+    } = req.query as Record<string, string>;
+
+    const query: Record<string, unknown> = {};
+
+    if (search && search.trim()) {
+      const regex = new RegExp(search.trim(), "i");
+      query.$or = [{ title: regex }, { author: regex }];
+    }
+
+    if (genre && genre !== "All genres") {
+      query.genre = genre;
+    }
+
+    if (language && language !== "All languages") {
+      query.language = language;
+    }
+
+    if (featured === "true") {
+      query.isFeatured = true;
+    }
+
+    const sortMap: Record<string, Record<string, 1 | -1>> = {
+      newest: { createdAt: -1 },
+      price_asc: { price: 1 },
+      price_desc: { price: -1 },
+      rating_desc: { rating: -1 },
+    };
+    const sortQuery = sortMap[sort] || sortMap.newest;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 8);
+    const skip = (pageNum - 1) * limitNum;
+
+    const collection = db.collection("items");
+
+    const [items, total] = await Promise.all([
+      collection.find(query).sort(sortQuery).skip(skip).limit(limitNum).toArray(),
+      collection.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      items,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.max(1, Math.ceil(total / limitNum)),
+      },
+    });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Failed to fetch items" });
   }
 });

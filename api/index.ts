@@ -6,7 +6,7 @@ import chatRouter from "../src/routes/chat";
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+app.use(cors({ origin: process.env.CLIENT_URL || "https://adhunikboighor.vercel.app", credentials: true }));
 app.use(express.json());
 
 let isConnected = false;
